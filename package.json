@@ -1,0 +1,12 @@
+{
+  "name": "illuvium-challenge",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.3.2",
+    "@truffle/hdwallet-provider": "^1.6.0",
+    "eth-sig-util": "^3.0.1",
+    "truffle-plugin-solhint": "^0.0.6"
+  }
+}
