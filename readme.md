@@ -7,10 +7,10 @@
 
 This is a solution for a challenge proposed by Illuvium. The main objective was to create an ERC-20 based contract with the functionality of transferring funds to an emergency address defined by the Token holder via an EIP-512 signature. In order to do so, `emergencyWithdrawWithSig` method must be called with the following parameters:
 
--   **\_exp** : The expiration timestamp of the EIP-712 signature;
 -   **v** : `parseInt(signature.substring(128, 130), 16)`;
 -   **r** : `"0x" + signature.substring(0, 64)`
 -   **s** : `"0x" + signature.substring(64, 128)`
+-   **deadline** : The expiration timestamp of the EIP-712 signature;
 
 The `signature` represents the signed Typed Data composed by the `keccak256` hash of the concatenation of `0x1901`, the `Domain Separator` and the `hashStruct` signed by the signer's private key.
 
