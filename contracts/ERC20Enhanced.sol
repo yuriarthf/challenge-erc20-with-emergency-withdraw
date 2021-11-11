@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 contract ERC20Enhanced is ERC20 {
 
     /// @dev Domain hash
-    bytes32 public constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+    bytes32 public constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,uint256 chainId,address verifyingContract)");
 
     /// @dev Emergency withdraw typehash
     bytes32 public constant EMERGENCY_WITHDRAW_TYPEHASH = keccak256("EmergencyWithdraw(uint256 expiration)");
@@ -27,16 +27,18 @@ contract ERC20Enhanced is ERC20 {
 
     /// @dev Check if address is not blacklisted
     modifier isNotBlacklisted(address tokenHolder) {
-        require(!emergency[tokenHolder].isBlacklisted, string(abi.encodePacked(tokenHolder, " is blacklisted")));
+        require(!emergency[tokenHolder].isBlacklisted, "Address is blacklisted");
         _;
     }
 
     constructor(string memory name_, string memory symbol_, uint256 initialSupply) ERC20(name_, symbol_) {
-        _mint(msg.sender, initialSupply);
+        _mint(msg.sender, initialSupply * 10**decimals());
     }
 
     /**
      * @dev Register an emergency address (backup address) for the msg.sender.
+     *
+     * @param emergencyAddress The emergency address to be set
      *
      * Emits a {RegisterEmergencyAddress} event.
      *
@@ -46,13 +48,33 @@ contract ERC20Enhanced is ERC20 {
      * - emergencyAddress should not be blacklisted
      */
     function registerEmergencyAddress(address emergencyAddress) external isNotBlacklisted(msg.sender) isNotBlacklisted(emergencyAddress) {
+        require(emergencyAddress != msg.sender, "Provide a different emergency address");
         emergency[msg.sender].emergencyAddress = emergencyAddress;
 
         emit RegisterEmergencyAddress(msg.sender, emergencyAddress);
     }
 
     /**
+     * @dev Get the emergency address of `tokenHolder`.
+     *
+     * @param tokenHolder Token Holder address
+     *
+     * Requirements:
+     *
+     * - tokenHolder must be different from the null address
+     */
+    function getEmergencyAddress(address tokenHolder) external view returns (address) {
+        require(tokenHolder != address(0), "Please provide a valid address");
+        return emergency[msg.sender].emergencyAddress;
+    }
+
+    /**
      * @dev Emergency withdraw using a signed message.
+     *
+     * @param _exp The EIP-712 signature expiration timestamp
+     * @param v the recovery byte of the signature
+     * @param r The first half of the ECDSA signature
+     * @param s The second half of th ECDSA signature
      *
      * Emits a {EmergencyWithdraw} event.
      *
@@ -71,7 +93,6 @@ contract ERC20Enhanced is ERC20 {
             abi.encode(
                 DOMAIN_TYPEHASH, 
                 keccak256(bytes(name())), 
-                keccak256(bytes("1")),
                 block.chainid,
                 address(this)
             )
@@ -86,7 +107,7 @@ contract ERC20Enhanced is ERC20 {
         );
 
         // EIP-191-compliant 712 hash
-        bytes32 digest = keccak256(abi.encodePacked(uint16(0x1901), domainSeparator, hashStruct));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, hashStruct));
 
         // Retrieve signer
         address signer = ecrecover(digest, v, r, s);
@@ -113,6 +134,10 @@ contract ERC20Enhanced is ERC20 {
 
     /**
      * @dev Transfer from `sender` to `recipient` an `amount` of tokens.
+     *
+     * @param sender The token sender address
+     * @param recipient The token recipient address, will be set to emergency address if it's blacklisted
+     * @param amount The amount of tokens to send
      * 
      * OBS: If the recipient is blacklisted, transfer amount to it's emergency address.
      *
@@ -141,6 +166,9 @@ contract ERC20Enhanced is ERC20 {
 
     /**
      * @dev Transfer to `recipient` an `amount` of tokens.
+     *
+     * @param recipient The token recipient address, will be set to emergency address if it's blacklisted
+     * @param amount The amount of tokens to send
      * 
      * OBS: If the recipient is blacklisted, transfer amount to it's emergency address.
      *

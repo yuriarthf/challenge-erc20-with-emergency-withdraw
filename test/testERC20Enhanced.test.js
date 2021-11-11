@@ -7,10 +7,11 @@ contract("ERC20Enhanced", (accounts) => {
     let chainId;
     let verifyingContract;
     const initialSupply = 10_000_000;
+    const decimals = 18;
 
     // Private key to sign Typed Data (from accounts[0])
     const privateKeyString =
-        "0xd603acb4735744861d0260a1c44f7a87fcbde32bf7a8fa8f012c59072b8ca48d";
+        "0x7d455b74192b01dce514a5ddc219708f350357806f66c53edea1971e62b44651";
     const signerPrivateKey = Buffer.from(privateKeyString.substring(2), "hex");
 
     before(async () => {
@@ -37,16 +38,20 @@ contract("ERC20Enhanced", (accounts) => {
     });
 
     it("Test emergency withdraw using signed message...", async () => {
+        // Double check emergency address
+        assert.equal(
+            await erc20Enhanced.getEmergencyAddress(accounts[0]),
+            accounts[1]
+        );
+
         // Define the domain separator
         const domain = [
             { name: "name", type: "string" },
-            { name: "version", type: "string" },
             { name: "chainId", type: "uint256" },
             { name: "verifyingContract", type: "address" },
         ];
         const domainData = {
             name: tokenName,
-            version: "1",
             chainId: chainId,
             verifyingContract: verifyingContract,
         };
@@ -74,17 +79,30 @@ contract("ERC20Enhanced", (accounts) => {
         };
 
         // Get signature
-        const msgParams = {
-            data: data,
-        };
+        // const signature = (await web3.eth.sign(data, accounts[0])).substring(2);
         const signature = sigUtil
-            .signTypedData_v4(signerPrivateKey, msgParams)
+            .signTypedData_v4(signerPrivateKey, { data })
             .substring(2);
+        assert.equal(
+            sigUtil.recoverTypedSignature_v4({ data, sig: "0x" + signature }),
+            accounts[0].toLowerCase()
+        );
 
         // Get r, s and v
         const r = "0x" + signature.substring(0, 64);
         const s = "0x" + signature.substring(64, 128);
         const v = parseInt(signature.substring(128, 130), 16);
+
+        // Rebuild signature and compare
+        const rebuiltSignature = sigUtil.concatSig(
+            Buffer.from(v.toString(), "hex"),
+            Buffer.from(r.substring(2), "hex"),
+            Buffer.from(s.substring(2), "hex")
+        );
+        assert.equal(
+            parseInt(rebuiltSignature, 16) - parseInt("0x" + signature, 16),
+            0
+        );
 
         // Log ECDSA values
         console.log(`R: ${r}`);
@@ -96,6 +114,9 @@ contract("ERC20Enhanced", (accounts) => {
 
         // Assert token balances
         assert.equal(await erc20Enhanced.balanceOf(accounts[0]), 0);
-        assert.equal(await erc20Enhanced.balanceOf(accounts[1]), initialSupply);
+        assert.equal(
+            await erc20Enhanced.balanceOf(accounts[1]),
+            initialSupply * 10 ** decimals
+        );
     });
 });
