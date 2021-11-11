@@ -1,6 +1,6 @@
 ## General Info:
 
--   **Contract Address**: `0x153a63671308b0Da7e5804D4C3C90D82A3A6eE5d`
+-   **Contract Address**: `0x123Ee8d21727d2C1eD7690642B96eCb18e445e8a`
 -   **Network**: Rinkeby
 
 ## Summary

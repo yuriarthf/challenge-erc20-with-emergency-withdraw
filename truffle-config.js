@@ -54,6 +54,7 @@ module.exports = {
                 );
             },
             network_id: "*",
+            gasPrice: 50000000000,
         },
         // Another network with more advanced options...
         // advanced: {

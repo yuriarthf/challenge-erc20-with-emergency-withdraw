@@ -1,11 +1,10 @@
 pragma solidity ^0.8.6;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
 
-contract ERC20Enhanced is ERC20 {
-
-    /// @dev Domain hash
-    bytes32 public constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,uint256 chainId,address verifyingContract)");
+contract ERC20Enhanced is EIP712, ERC20 {
 
     /// @dev Emergency withdraw typehash
     bytes32 public constant EMERGENCY_WITHDRAW_TYPEHASH = keccak256("EmergencyWithdraw(uint256 expiration)");
@@ -31,7 +30,7 @@ contract ERC20Enhanced is ERC20 {
         _;
     }
 
-    constructor(string memory name_, string memory symbol_, uint256 initialSupply) ERC20(name_, symbol_) {
+    constructor(string memory name_, string memory symbol_, uint256 initialSupply) EIP712(name_, "1") ERC20(name_, symbol_) {
         _mint(msg.sender, initialSupply * 10**decimals());
     }
 
@@ -71,10 +70,8 @@ contract ERC20Enhanced is ERC20 {
     /**
      * @dev Emergency withdraw using a signed message.
      *
-     * @param _exp The EIP-712 signature expiration timestamp
-     * @param v the recovery byte of the signature
-     * @param r The first half of the ECDSA signature
-     * @param s The second half of th ECDSA signature
+     * @param signature The ECDSA signature
+     * @param deadline The EIP-712 signature expiration/deadline timestamp 
      *
      * Emits a {EmergencyWithdraw} event.
      *
@@ -86,38 +83,30 @@ contract ERC20Enhanced is ERC20 {
      * - The signer should not be blacklisted
      * - Balance of signer should be greater than ZERO
      */
-    function emergencyWithdrawWithSig(uint256 _exp, uint8 v, bytes32 r, bytes32 s) public {
+    function emergencyWithdrawWithSig(bytes calldata signature, uint256 deadline) public {
 
-        // EIP-712 Domain Separator
-        bytes32 domainSeparator = keccak256(
-            abi.encode(
-                DOMAIN_TYPEHASH, 
-                keccak256(bytes(name())), 
-                block.chainid,
-                address(this)
-            )
-        );
-
-        // EIP-712 hashStruct of EmergencyWithdraw
-        bytes32 hashStruct = keccak256(
+        // EIP-712 digest
+        bytes32 digest = _hashTypedDataV4(keccak256(
             abi.encode(
                 EMERGENCY_WITHDRAW_TYPEHASH,
-                _exp
+                deadline
             )
-        );
-
-        // EIP-191-compliant 712 hash
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, hashStruct));
+        ));
 
         // Retrieve signer
-        address signer = ecrecover(digest, v, r, s);
+        address signer = ECDSA.recover(digest, signature);
 
         // Check message integrity
         require(signer != address(0), "ECDSA: invalid signature");
-        require(block.timestamp < _exp, "signature expired");
+        require(block.timestamp < deadline, "signature expired");
 
         // Check if the emergency address has been set and if it's not blacklisted
-        require(emergency[signer].emergencyAddress != address(0), "Invalid emergency address");
+        require(
+            emergency[signer].emergencyAddress != address(0), 
+            string(
+                abi.encodePacked("Invalid emergency address for: ", _addressToString(signer))
+            )
+        );
         require(!emergency[signer].isBlacklisted, "Signer address is blacklisted");
 
         // Check if signer has any token
@@ -183,4 +172,23 @@ contract ERC20Enhanced is ERC20 {
         return true;
     }
 
+    /**
+     * @dev Convert address to string.
+     *
+     * @param _addr Address to be converted to string
+     *
+     */
+    function _addressToString(address _addr) internal pure returns (string memory) {
+        bytes32 value = bytes32(uint256(uint160(_addr)));
+        bytes memory alphabet = "0123456789abcdef";
+
+        bytes memory str = new bytes(51);
+        str[0] = "0";
+        str[1] = "x";
+        for (uint i = 0; i < 20; i++) {
+            str[2+i*2] = alphabet[uint(uint8(value[i + 12] >> 4))];
+            str[3+i*2] = alphabet[uint(uint8(value[i + 12] & 0x0f))];
+        }
+        return string(str);
+    }
 }
