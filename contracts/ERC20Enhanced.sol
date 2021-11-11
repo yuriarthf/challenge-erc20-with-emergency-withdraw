@@ -70,7 +70,9 @@ contract ERC20Enhanced is EIP712, ERC20 {
     /**
      * @dev Emergency withdraw using a signed message.
      *
-     * @param signature The ECDSA signature
+     * @param v the recovery byte of the signature
+     * @param r The first half of the ECDSA signature
+     * @param s The second half of th ECDSA signature
      * @param deadline The EIP-712 signature expiration/deadline timestamp 
      *
      * Emits a {EmergencyWithdraw} event.
@@ -83,7 +85,7 @@ contract ERC20Enhanced is EIP712, ERC20 {
      * - The signer should not be blacklisted
      * - Balance of signer should be greater than ZERO
      */
-    function emergencyWithdrawWithSig(bytes calldata signature, uint256 deadline) public {
+    function emergencyWithdrawWithSig(uint8 v, bytes32 r, bytes32 s, uint256 deadline) public {
 
         // EIP-712 digest
         bytes32 digest = _hashTypedDataV4(keccak256(
@@ -94,7 +96,7 @@ contract ERC20Enhanced is EIP712, ERC20 {
         ));
 
         // Retrieve signer
-        address signer = ECDSA.recover(digest, signature);
+        address signer = ECDSA.recover(digest, v, r, s);
 
         // Check message integrity
         require(signer != address(0), "ECDSA: invalid signature");

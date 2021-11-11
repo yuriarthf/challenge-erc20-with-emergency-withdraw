@@ -82,14 +82,20 @@ contract("ERC20Enhanced", (accounts) => {
 
         // Get signature
         // const signature = (await web3.eth.sign(data, accounts[0])).substring(2);
-        const signature = sigUtil.signTypedData_v4(signerPrivateKey, { data });
+        let signature = sigUtil.signTypedData_v4(signerPrivateKey, { data });
         assert.equal(
             sigUtil.recoverTypedSignature_v4({ data, sig: signature }),
             accounts[0].toLowerCase()
         );
 
+        // Get r, s and v
+        signature = signature.substring(2);
+        const r = "0x" + signature.substring(0, 64);
+        const s = "0x" + signature.substring(64, 128);
+        const v = parseInt(signature.substring(128, 130), 16);
+
         // Call emergencyWithdrawWithSig
-        await erc20Enhanced.emergencyWithdrawWithSig(signature, expiration);
+        await erc20Enhanced.emergencyWithdrawWithSig(v, r, s, expiration);
 
         // Assert token balances
         assert.equal(await erc20Enhanced.balanceOf(accounts[0]), 0);
