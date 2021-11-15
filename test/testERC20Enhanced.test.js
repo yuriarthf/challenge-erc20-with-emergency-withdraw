@@ -10,26 +10,22 @@ const ethUtil = require("ethereumjs-util");
 
 contract("ERC20Enhanced", (accounts) => {
     let erc20Enhanced;
-    let tokenName;
-    let chainId;
-    let verifyingContract;
+    let name;
     const initialSupply = 10_000_000;
     const decimals = 18;
 
+    // EIP712 related
+    let DOMAIN_SEPARATOR_TYPEHASH;
+    let DOMAIN_SEPARATOR;
+    let EMERGENCY_WITHDRAW_TYPEHASH;
+
     // Private key to sign Typed Data (from accounts[0])
     const privateKeyString =
-        "0xe736a0bff423bcda1fbd31e55ba436bbcc81d3ecf84ec9f652265c2979cc3828";
+        "0x8cbf87e3b1b67c315c7b475cfc4a9ee9552e536fa6157556c4f4c4dbb8c2feee";
 
     before(async () => {
         erc20Enhanced = await ERC20Enhanced.deployed();
-        tokenName = await erc20Enhanced.name.call();
-        chainId = parseInt(await web3.eth.getChainId(), 10);
-        verifyingContract = erc20Enhanced.address;
-
-        // Log contract information
-        console.log(`Token Name: ${tokenName}`);
-        console.log(`Chain ID: ${chainId}`);
-        console.log(`Contract address: ${verifyingContract}`);
+        name = await erc20Enhanced.name();
     });
 
     it("Register emergency address...", async () => {
@@ -43,34 +39,47 @@ contract("ERC20Enhanced", (accounts) => {
         );
     });
 
+    it("Validate hashes...", async () => {
+        // EIP712Domain Typed Data
+        DOMAIN_SEPARATOR_TYPEHASH = keccak256(
+            toUtf8Bytes(
+                "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+            )
+        );
+
+        // Domain Separator validation
+        assert.equal(name, "MyEnhancedToken");
+        DOMAIN_SEPARATOR = keccak256(
+            defaultAbiCoder.encode(
+                ["bytes32", "bytes32", "bytes32", "uint256", "address"],
+                [
+                    DOMAIN_SEPARATOR_TYPEHASH,
+                    keccak256(toUtf8Bytes(name)),
+                    keccak256(toUtf8Bytes("1")),
+                    1,
+                    erc20Enhanced.address,
+                ]
+            )
+        );
+        assert.equal(
+            await erc20Enhanced.getDomainSeparatorHash(),
+            DOMAIN_SEPARATOR
+        );
+
+        // EmergencyWithdraw type hash
+        EMERGENCY_WITHDRAW_TYPEHASH = keccak256(
+            toUtf8Bytes("EmergencyWithdraw(address from,uint256 expiration)")
+        );
+        assert.equal(
+            await erc20Enhanced.EMERGENCY_WITHDRAW_TYPEHASH(),
+            EMERGENCY_WITHDRAW_TYPEHASH
+        );
+    });
     it("Test emergency withdraw using signed message...", async () => {
         // Double check emergency address
         assert.equal(
             await erc20Enhanced.getEmergencyAddress(accounts[0]),
             accounts[1]
-        );
-
-        // EIP712Domain Typed Data
-        const EIP712Domain =
-            "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)";
-
-        // Get Domain Separator
-        const DOMAIN_SEPARATOR = keccak256(
-            defaultAbiCoder.encode(
-                ["bytes32", "bytes32", "bytes32", "uint256", "address"],
-                [
-                    keccak256(toUtf8Bytes(EIP712Domain)),
-                    keccak256(toUtf8Bytes(tokenName)),
-                    keccak256(toUtf8Bytes("1")),
-                    chainId,
-                    verifyingContract,
-                ]
-            )
-        );
-
-        // Get Emergency Withdraw Type Hash and Hash Struc
-        const EMERGENCY_WITHDRAW_TYPEHASH = keccak256(
-            toUtf8Bytes("EmergencyWithdraw(uint256 expiration)")
         );
 
         // Define expiration as the Maximum uint256 value

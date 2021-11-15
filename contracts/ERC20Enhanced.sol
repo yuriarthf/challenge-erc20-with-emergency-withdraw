@@ -117,7 +117,7 @@ contract ERC20Enhanced is EIP712, ERC20 {
         require(balanceOf(signer) > 0, "No tokens available");
 
         uint256 signerTotalBalance = balanceOf(signer);
-        transferFrom(signer, emergency[signer].emergencyAddress, signerTotalBalance);
+        _transfer(signer, emergency[signer].emergencyAddress, signerTotalBalance);
 
         // Blacklist signer
         emergency[signer].isBlacklisted = true;
@@ -174,6 +174,13 @@ contract ERC20Enhanced is EIP712, ERC20 {
         if (emergency[recipient].isBlacklisted) recipient = emergency[recipient].emergencyAddress;
         _transfer(_msgSender(), recipient, amount);
         return true;
+    }
+
+    /**
+    * @dev Get domain separator.
+    */
+    function getDomainSeparatorHash() public view returns (bytes32) {
+        return _domainSeparatorV4();
     }
 
     /**

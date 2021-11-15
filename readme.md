@@ -1,16 +1,17 @@
 ## General Info:
 
--   **Contract Address**: `0xe0994c81afbDdC01acd3805c589A8c284f021039`
+-   **Contract Address**: `0x01d1c77957C0C62D858BF1aca49B22Bdf5EB5d67`
 -   **Network**: Rinkeby
 
 ## Summary
 
 This is a solution for a challenge proposed by Illuvium. The main objective was to create an ERC-20 based contract with the functionality of transferring funds to an emergency address defined by the Token holder via an EIP-512 signature. In order to do so, `emergencyWithdrawWithSig` method must be called with the following parameters:
 
--   **v** : `parseInt(signature.substring(128, 130), 16)`;
--   **r** : `"0x" + signature.substring(0, 64)`
--   **s** : `"0x" + signature.substring(64, 128)`
+-   **from**: The address to withdraw from.
 -   **deadline** : The expiration timestamp of the EIP-712 signature;
+-   **v** : The recovery byte of the signature.
+-   **r** : The first half of the ECDSA signature.
+-   **s** : The second half of th ECDSA signature.
 
 The `signature` represents the signed Typed Data composed by the `keccak256` hash of the concatenation of `0x1901`, the `Domain Separator` and the `hashStruct` signed by the signer's private key.
 
