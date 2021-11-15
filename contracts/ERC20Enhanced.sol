@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
 contract ERC20Enhanced is EIP712, ERC20 {
 
     /// @dev Emergency withdraw typehash
-    bytes32 public constant EMERGENCY_WITHDRAW_TYPEHASH = keccak256("EmergencyWithdraw(uint256 expiration)");
+    bytes32 public constant EMERGENCY_WITHDRAW_TYPEHASH = keccak256("EmergencyWithdraw(address from,uint256 expiration)");
 
     /// @dev EmergencyTransfer struct containing emergency address and blacklist flag
     struct EmergencyTransfer {
@@ -70,10 +70,11 @@ contract ERC20Enhanced is EIP712, ERC20 {
     /**
      * @dev Emergency withdraw using a signed message.
      *
+     * @param from The address to withdraw from
+     * @param deadline The EIP-712 signature expiration/deadline timestamp 
      * @param v the recovery byte of the signature
      * @param r The first half of the ECDSA signature
      * @param s The second half of th ECDSA signature
-     * @param deadline The EIP-712 signature expiration/deadline timestamp 
      *
      * Emits a {EmergencyWithdraw} event.
      *
@@ -85,12 +86,13 @@ contract ERC20Enhanced is EIP712, ERC20 {
      * - The signer should not be blacklisted
      * - Balance of signer should be greater than ZERO
      */
-    function emergencyWithdrawWithSig(uint8 v, bytes32 r, bytes32 s, uint256 deadline) public {
+    function emergencyWithdrawWithSig(address from, uint256 deadline, uint8 v, bytes32 r, bytes32 s) public {
 
         // EIP-712 digest
         bytes32 digest = _hashTypedDataV4(keccak256(
             abi.encode(
                 EMERGENCY_WITHDRAW_TYPEHASH,
+                from,
                 deadline
             )
         ));

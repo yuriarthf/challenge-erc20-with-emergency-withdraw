@@ -1,5 +1,12 @@
 const ERC20Enhanced = artifacts.require("ERC20Enhanced");
-const sigUtil = require("eth-sig-util");
+const ethers = require("ethers");
+const {
+    keccak256,
+    defaultAbiCoder,
+    toUtf8Bytes,
+    solidityPack,
+} = require("ethers").utils;
+const ethUtil = require("ethereumjs-util");
 
 contract("ERC20Enhanced", (accounts) => {
     let erc20Enhanced;
@@ -11,8 +18,7 @@ contract("ERC20Enhanced", (accounts) => {
 
     // Private key to sign Typed Data (from accounts[0])
     const privateKeyString =
-        "0x0252663ed6502649ae29523450910a4549874f08b2cdf737c33c2eb88e7fb95a";
-    const signerPrivateKey = Buffer.from(privateKeyString.substring(2), "hex");
+        "0xe736a0bff423bcda1fbd31e55ba436bbcc81d3ecf84ec9f652265c2979cc3828";
 
     before(async () => {
         erc20Enhanced = await ERC20Enhanced.deployed();
@@ -44,58 +50,79 @@ contract("ERC20Enhanced", (accounts) => {
             accounts[1]
         );
 
-        // Define the domain separator
-        const domain = [
-            { name: "name", type: "string" },
-            { name: "version", type: "string" },
-            { name: "chainId", type: "uint256" },
-            { name: "verifyingContract", type: "address" },
-        ];
-        const domainData = {
-            name: tokenName,
-            version: "1",
-            chainId: chainId,
-            verifyingContract: verifyingContract,
-        };
+        // EIP712Domain Typed Data
+        const EIP712Domain =
+            "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)";
 
-        // Define expiration
-        const currentBlockTimestamp = (await web3.eth.getBlock("latest"))
-            .timestamp;
-        const expiration = currentBlockTimestamp + 24 * 60 * 60;
-
-        // Define the emergency typed structure
-        const emergencyWithdraw = [{ name: "expiration", type: "uint256" }];
-        const emergencyWithdrawData = {
-            expiration: expiration,
-        };
-
-        // Build message data
-        const data = {
-            types: {
-                EIP712Domain: domain,
-                EmergencyWithdraw: emergencyWithdraw,
-            },
-            domain: domainData,
-            primaryType: "EmergencyWithdraw",
-            message: emergencyWithdrawData,
-        };
-
-        // Get signature
-        // const signature = (await web3.eth.sign(data, accounts[0])).substring(2);
-        let signature = sigUtil.signTypedData_v4(signerPrivateKey, { data });
-        assert.equal(
-            sigUtil.recoverTypedSignature_v4({ data, sig: signature }),
-            accounts[0].toLowerCase()
+        // Get Domain Separator
+        const DOMAIN_SEPARATOR = keccak256(
+            defaultAbiCoder.encode(
+                ["bytes32", "bytes32", "bytes32", "uint256", "address"],
+                [
+                    keccak256(toUtf8Bytes(EIP712Domain)),
+                    keccak256(toUtf8Bytes(tokenName)),
+                    keccak256(toUtf8Bytes("1")),
+                    chainId,
+                    verifyingContract,
+                ]
+            )
         );
 
-        // Get r, s and v
-        signature = signature.substring(2);
-        const r = "0x" + signature.substring(0, 64);
-        const s = "0x" + signature.substring(64, 128);
-        const v = parseInt(signature.substring(128, 130), 16);
+        // Get Emergency Withdraw Type Hash and Hash Struc
+        const EMERGENCY_WITHDRAW_TYPEHASH = keccak256(
+            toUtf8Bytes("EmergencyWithdraw(uint256 expiration)")
+        );
+
+        // Define expiration as the Maximum uint256 value
+        const EXPIRATION = ethers.constants.MaxUint256;
+        const EMERGENCY_WITHDRAW_HASHSTRUCT = keccak256(
+            defaultAbiCoder.encode(
+                ["bytes32", "address", "uint256"],
+                [EMERGENCY_WITHDRAW_TYPEHASH, accounts[0], EXPIRATION]
+            )
+        );
+
+        // Get digest
+        const digest = keccak256(
+            solidityPack(
+                ["bytes1", "bytes1", "bytes32", "bytes32"],
+                [
+                    "0x19",
+                    "0x01",
+                    DOMAIN_SEPARATOR,
+                    EMERGENCY_WITHDRAW_HASHSTRUCT,
+                ]
+            )
+        );
+
+        // Get ECDSA signature
+        const sig = ethUtil.ecsign(
+            ethUtil.toBuffer(digest),
+            ethUtil.toBuffer(privateKeyString)
+        );
+
+        const publicKey = ethUtil.ecrecover(
+            ethUtil.toBuffer(digest),
+            sig.v,
+            sig.r,
+            sig.s
+        );
+        const address = ethUtil.addHexPrefix(
+            ethUtil.pubToAddress(publicKey).toString("hex")
+        );
+
+        // Assert address is equal to accounts[0]
+        console.log(`Recovered address: ${address}`);
+        assert.equal(address, accounts[0].toLowerCase());
 
         // Call emergencyWithdrawWithSig
-        await erc20Enhanced.emergencyWithdrawWithSig(v, r, s, expiration);
+        await erc20Enhanced.emergencyWithdrawWithSig(
+            accounts[0],
+            EXPIRATION,
+            ethUtil.bufferToInt(sig.v),
+            ethUtil.addHexPrefix(sig.r.toString("hex")),
+            ethUtil.addHexPrefix(sig.s.toString("hex"))
+        );
 
         // Assert token balances
         assert.equal(await erc20Enhanced.balanceOf(accounts[0]), 0);
